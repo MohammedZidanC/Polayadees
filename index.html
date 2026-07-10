@@ -29,7 +29,7 @@
     html, body {
       height: 100%;
       font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-      background: #000; /* Black background for cinematic intro */
+      background: #000; 
       color: var(--text-primary);
       overflow: hidden;
     }
@@ -42,60 +42,16 @@
       position: relative;
     }
 
-    /* ═══════ SPLASH / CURTAIN ═══════ */
-    #splashScreen {
-      position: fixed;
-      inset: 0;
-      z-index: 1000;
-      background: transparent;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      pointer-events: none;
-    }
-
-    #curtainCanvas {
-      position: absolute;
-      inset: 0;
-      width: 100%;
-      height: 100%;
-    }
-
-    .splash-hidden { display: none !important; opacity: 0; transition: opacity 1s; }
-
-    /* ─── Decorative curtain rod ─── */
-    .curtain-rod {
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      height: 18px;
-      z-index: 1001;
-      background: linear-gradient(180deg, #3a2a18 0%, #6b4c2a 40%, #c9a45c 52%, #6b4c2a 64%, #3a2a18 100%);
-      box-shadow: 0 4px 20px rgba(0,0,0,0.6);
-    }
-
-    .curtain-rod::before {
-      content: '';
-      position: absolute;
-      inset: 0;
-      background: linear-gradient(90deg,
-        transparent 0%, rgba(255,220,140,0.15) 10%, transparent 20%,
-        transparent 40%, rgba(255,220,140,0.2) 50%, transparent 60%,
-        transparent 80%, rgba(255,220,140,0.15) 90%, transparent 100%
-      );
-    }
-
     /* ═══════ PRESENTATION TEXTS ═══════ */
     #presentationScreen {
       position: fixed;
       inset: 0;
-      z-index: 500;
+      z-index: 1500;
       display: flex;
       align-items: center;
       justify-content: center;
       background: #000;
-      pointer-events: none;
+      pointer-events: auto; /* Allow interaction if needed to bypass autoplay block */
     }
 
     .pres-text {
@@ -304,15 +260,9 @@
     }
   </style>
 </head>
-<body>
+<body onclick="tryEnableAudio()">
 
-  <!-- ═══════ SPLASH CURTAIN ═══════ -->
-  <div id="splashScreen">
-    <div class="curtain-rod"></div>
-    <canvas id="curtainCanvas"></canvas>
-  </div>
-
-  <!-- ═══════ PRESENTATION SCREEN ═══════ -->
+  <!-- ═══════ PRESENTATION SCREEN (SPLASH) ═══════ -->
   <div id="presentationScreen">
     <div class="pres-text" id="presText1">
       <h2>Polayadees Presents</h2>
@@ -340,7 +290,9 @@
       </div>
 
       <div class="video-container" id="videoContainer">
-        <video id="videoPlayer" autoplay muted playsinline></video>
+        <!-- Initialized without muted, allows sound on autoplay if allowed by browser -->
+        <video id="videoPlayer" autoplay playsinline></video>
+        
         <div class="reconnect-overlay" id="reconnectOverlay">
           <div class="spinner"></div>
           <p>Reconnecting to stream…</p>
@@ -358,10 +310,10 @@
           <button class="btn" id="muteBtn" onclick="toggleMute()">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
-              <line x1="23" y1="9" x2="17" y2="15" id="muteLine1"></line>
-              <line x1="17" y1="9" x2="23" y2="15" id="muteLine2"></line>
+              <line x1="23" y1="9" x2="17" y2="15" id="muteLine1" style="display: none;"></line>
+              <line x1="17" y1="9" x2="23" y2="15" id="muteLine2" style="display: none;"></line>
             </svg>
-            <span id="muteText">Unmute</span>
+            <span id="muteText">Mute</span>
           </button>
           <button class="btn" onclick="manualReload()">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -385,228 +337,6 @@
   </div>
 
   <div class="event-log" id="eventLog"></div>
-
-  <!-- ═══════════════════════════════════════════════════════════ -->
-  <!-- CLOTH PHYSICS CURTAIN (BLANK)                               -->
-  <!-- ═══════════════════════════════════════════════════════════ -->
-  <script>
-  (function() {
-    const canvas = document.getElementById('curtainCanvas');
-    const ctx    = canvas.getContext('2d');
-    const splash = document.getElementById('splashScreen');
-
-    // ── Grid resolution increased for smoother cloth ──
-    const COLS = 120;
-    const ROWS = 90;
-    const GRAVITY = 0.35;
-    const DAMPING = 0.985;
-    const CONSTRAINT_ITERS = 6;
-
-    let W, H, spacingX, spacingY;
-    let pointsLeft  = [];
-    let pointsRight = [];
-    let opening = false;
-    let openProgress = 0;      // 0 → 1
-    let curtainDone = false;
-    let idleTime = 0;          // for pre-open ripple
-
-    function resize() {
-      W = canvas.width  = window.innerWidth;
-      H = canvas.height = window.innerHeight;
-      spacingX = (W / 2) / (COLS - 1);
-      spacingY = (H - 20) / (ROWS - 1);
-      buildCurtains();
-    }
-
-    function makePoint(x, y, pinned) {
-      return { x, y, ox: x, oy: y, px: x, py: y, pinned, pinX: x, pinY: y };
-    }
-
-    function buildCurtains() {
-      pointsLeft  = [];
-      pointsRight = [];
-      const topY = 18;
-
-      for (let r = 0; r < ROWS; r++) {
-        for (let c = 0; c < COLS; c++) {
-          const lx = c * spacingX;
-          const ly = topY + r * spacingY;
-          pointsLeft.push(makePoint(lx, ly, r === 0));
-
-          const rx = W / 2 + c * spacingX;
-          const ry = topY + r * spacingY;
-          pointsRight.push(makePoint(rx, ry, r === 0));
-        }
-      }
-    }
-
-    // ── Physics ──
-    function simulate(points) {
-      for (const p of points) {
-        if (p.pinned) {
-          p.x = p.pinX;
-          p.y = p.pinY;
-          continue;
-        }
-        const vx = (p.x - p.px) * DAMPING;
-        const vy = (p.y - p.py) * DAMPING;
-        p.px = p.x;
-        p.py = p.y;
-        p.x += vx;
-        p.y += vy + GRAVITY;
-      }
-
-      // Constraints
-      for (let iter = 0; iter < CONSTRAINT_ITERS; iter++) {
-        for (let r = 0; r < ROWS; r++) {
-          for (let c = 0; c < COLS; c++) {
-            const i = r * COLS + c;
-            if (c < COLS - 1) constrain(points[i], points[i + 1], spacingX);
-            if (r < ROWS - 1) constrain(points[i], points[i + COLS], spacingY);
-          }
-        }
-      }
-    }
-
-    function constrain(a, b, rest) {
-      const dx = b.x - a.x;
-      const dy = b.y - a.y;
-      const dist = Math.sqrt(dx * dx + dy * dy) || 0.001;
-      const diff = (dist - rest) / dist * 0.5;
-      const ox = dx * diff;
-      const oy = dy * diff;
-      if (!a.pinned) { a.x += ox; a.y += oy; }
-      if (!b.pinned) { b.x -= ox; b.y -= oy; }
-    }
-
-    // ── Opening animation ──
-    function updateOpening(dt) {
-      if (!opening) return;
-      openProgress += dt * 0.45;
-      if (openProgress > 1) openProgress = 1;
-
-      const t = 1 - Math.pow(1 - openProgress, 3);
-
-      for (let c = 0; c < COLS; c++) {
-        const pl = pointsLeft[c];
-        pl.pinX = pl.ox - (W / 2 + 100) * t;
-
-        const pr = pointsRight[c];
-        pr.pinX = pr.ox + (W / 2 + 100) * t;
-      }
-
-      if (openProgress >= 1 && !curtainDone) {
-        curtainDone = true;
-        setTimeout(() => {
-          splash.classList.add('splash-hidden');
-        }, 1000);
-      }
-    }
-
-    // ── Idle ripple ──
-    function applyWind(points, side) {
-      if (opening) return;
-      idleTime += 0.016;
-      for (let r = 1; r < ROWS; r++) {
-        for (let c = 0; c < COLS; c++) {
-          const p = points[r * COLS + c];
-          const wave = Math.sin(idleTime * 1.5 + r * 0.3 + c * 0.2) * 0.4;
-          const gust = Math.sin(idleTime * 0.7 + c * 0.5) * 0.15;
-          p.x += (wave + gust) * (side === 'left' ? 1 : -1);
-        }
-      }
-    }
-
-    // ── Render ──
-    function renderCurtain(points) {
-      for (let r = 0; r < ROWS - 1; r++) {
-        for (let c = 0; c < COLS - 1; c++) {
-          const i  = r * COLS + c;
-          const tl = points[i];
-          const tr = points[i + 1];
-          const bl = points[i + COLS];
-          const br = points[i + COLS + 1];
-
-          const nx = (tr.x - tl.x);
-          const foldShade = Math.abs(nx) / spacingX;
-          const depth = 0.3 + foldShade * 0.5;
-
-          const baseR = 100, baseG = 14, baseB = 22;
-          const rr = Math.floor(baseR * depth);
-          const gg = Math.floor(baseG * depth);
-          const bb = Math.floor(baseB * depth);
-
-          // Sub-pixel rendering overlap to fix thin gaps
-          ctx.fillStyle = `rgb(${rr},${gg},${bb})`;
-          ctx.beginPath();
-          ctx.moveTo(tl.x - 0.5, tl.y - 0.5);
-          ctx.lineTo(tr.x + 0.5, tr.y - 0.5);
-          ctx.lineTo(br.x + 0.5, br.y + 0.5);
-          ctx.lineTo(bl.x - 0.5, bl.y + 0.5);
-          ctx.closePath();
-          ctx.fill();
-        }
-      }
-    }
-
-    // ── Main loop ──
-    let lastTime = 0;
-    function loop(time) {
-      if (curtainDone && splash.classList.contains('splash-hidden')) return;
-
-      const dt = Math.min((time - lastTime) / 1000, 0.05) || 0.016;
-      lastTime = time;
-
-      ctx.clearRect(0, 0, W, H);
-      
-      // Black background
-      ctx.fillStyle = '#000';
-      ctx.fillRect(0, 0, W, H);
-
-      updateOpening(dt);
-
-      applyWind(pointsLeft, 'left');
-      applyWind(pointsRight, 'right');
-
-      simulate(pointsLeft);
-      simulate(pointsRight);
-
-      renderCurtain(pointsLeft);
-      renderCurtain(pointsRight);
-
-      const rodGrad = ctx.createLinearGradient(0, 0, 0, 18);
-      rodGrad.addColorStop(0, '#3a2a18');
-      rodGrad.addColorStop(0.4, '#6b4c2a');
-      rodGrad.addColorStop(0.52, '#c9a45c');
-      rodGrad.addColorStop(0.64, '#6b4c2a');
-      rodGrad.addColorStop(1, '#3a2a18');
-      ctx.fillStyle = rodGrad;
-      ctx.fillRect(0, 0, W, 18);
-
-      for (const fx of [14, W - 14]) {
-        const fGrad = ctx.createRadialGradient(fx - 2, 9, 0, fx, 10, 12);
-        fGrad.addColorStop(0, '#d4aa54');
-        fGrad.addColorStop(0.6, '#8b6228');
-        fGrad.addColorStop(1, '#3a2a18');
-        ctx.beginPath();
-        ctx.arc(fx, 10, 10, 0, Math.PI * 2);
-        ctx.fillStyle = fGrad;
-        ctx.fill();
-      }
-
-      requestAnimationFrame(loop);
-    }
-
-    window.addEventListener('resize', resize);
-    resize();
-    requestAnimationFrame(loop);
-
-    // Sequence trigger
-    window.triggerCurtainSequence = function() {
-      opening = true;
-    };
-  })();
-  </script>
 
   <!-- ═══════════════════════════════════════════════════════════ -->
   <!-- SEQUENCE AND PLAYER LOGIC                                   -->
@@ -637,42 +367,53 @@
     let startTime = Date.now();
     let lastPlayPos = 0;
     let lastPlayTime = Date.now();
+    let audioEnabled = false;
     
+    // Fallback: If browser blocks autoplay with sound, a single click will fix it
+    function tryEnableAudio() {
+      if(!audioEnabled) {
+        video.muted = false;
+        video.play().catch(()=>{});
+        audioEnabled = true;
+      }
+    }
+
     // ── SEQUENCING TIMELINE ──
     document.addEventListener("DOMContentLoaded", () => {
       // 1. Immediately start preloading the stream in background
       initStream();
       
-      // 2. Open curtains automatically after 2 seconds
-      setTimeout(() => {
-        if(window.triggerCurtainSequence) window.triggerCurtainSequence();
-      }, 2000);
-
-      // 3. Show "KUTTAPAAYI PRESENTS"
+      // 2. Show "POLAYADEES PRESENTS"
       setTimeout(() => {
         document.getElementById('presText1').classList.add('visible');
-      }, 3500);
+      }, 1000);
 
-      // 4. Fade out "KUTTAPAAYI PRESENTS"
+      // 3. Fade out
       setTimeout(() => {
         document.getElementById('presText1').classList.remove('visible');
-      }, 6000);
+      }, 3500);
 
-      // 5. Show "GLOBO TV BRAZIL"
+      // 4. Show "GLOBO TV BRAZIL"
       setTimeout(() => {
         document.getElementById('presText2').classList.add('visible');
-      }, 7000);
+      }, 4500);
 
-      // 6. Fade out "GLOBO TV BRAZIL"
+      // 5. Fade out
       setTimeout(() => {
         document.getElementById('presText2').classList.remove('visible');
-      }, 9500);
+      }, 7000);
 
-      // 7. Hide presentation screen and reveal player
+      // 6. Hide presentation screen, reveal player, and go fullscreen
       setTimeout(() => {
         document.getElementById('presentationScreen').style.display = 'none';
         document.getElementById('playerScreen').classList.add('visible');
-      }, 10500);
+        
+        // Browsers block automatic fullscreen without a user gesture (like a click), 
+        // but we'll attempt it anyway in case settings allow it.
+        try {
+          goFullscreen();
+        } catch(e) {}
+      }, 8000);
     });
 
     function addLog(message, color = 'green') {
@@ -715,7 +456,7 @@
     }
 
     function goFullscreen() {
-      const el = videoContainer;
+      const el = videoContainer; // or document.documentElement to fullscreen entire page
       if (el.requestFullscreen) el.requestFullscreen();
       else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
       else if (el.msRequestFullscreen) el.msRequestFullscreen();
@@ -759,15 +500,19 @@
       hls = new Hls({
         enableWorker: true,
         lowLatencyMode: false,
+        // -- NETWORK REINFORCEMENT --
+        maxBufferLength: 60,         // Increase buffer limit to 60 seconds
+        maxMaxBufferLength: 600,     
+        backBufferLength: 30,        // Keep history
+        liveSyncDurationCount: 6,    // Increase acceptable delay from live edge (helps stabilize stream)
+        liveMaxLatencyDurationCount: 15,
         fragLoadingTimeOut: 20000,
-        fragLoadingMaxRetry: 6,
+        fragLoadingMaxRetry: 10,
         fragLoadingRetryDelay: 1000,
-        manifestLoadingTimeOut: 15000,
-        manifestLoadingMaxRetry: 4,
-        manifestLoadingRetryDelay: 1500,
-        levelLoadingTimeOut: 15000,
-        levelLoadingMaxRetry: 4,
-        levelLoadingRetryDelay: 1500,
+        manifestLoadingTimeOut: 20000,
+        manifestLoadingMaxRetry: 10,
+        manifestLoadingRetryDelay: 1000,
+        levelLoadingMaxRetry: 10,
         startLevel: -1,
       });
 
@@ -775,7 +520,15 @@
       hls.attachMedia(video);
 
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
-        video.play().catch(() => {});
+        video.play().catch((e) => {
+          // If browser blocks unmuted autoplay, mute it to allow it to load, user can unmute later
+          console.log("Autoplay blocked, muting to start stream", e);
+          video.muted = true;
+          video.play().catch(()=>{});
+          muteTextEl.textContent = 'Unmute';
+          muteLine1.style.display = '';
+          muteLine2.style.display = '';
+        });
         retryCount = 0;
         setStatus('live', 'LIVE');
         showOverlay(false);
