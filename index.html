@@ -1,0 +1,853 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Globo TV Brazil</title>
+  <meta name="description" content="Watch Globo TV Brazil live.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Playfair+Display:wght@700;800;900&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+  <style>
+    *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+
+    :root {
+      --bg-primary: #0a0a12;
+      --bg-secondary: #12121e;
+      --bg-glass: rgba(18, 18, 30, 0.65);
+      --accent: #00c896;
+      --accent-glow: rgba(0, 200, 150, 0.35);
+      --accent-dim: rgba(0, 200, 150, 0.12);
+      --text-primary: #f0f0f5;
+      --text-secondary: #8a8a9e;
+      --danger: #ff4d6a;
+      --warning: #ffb347;
+      --border: rgba(255, 255, 255, 0.06);
+      --radius: 16px;
+    }
+
+    html, body {
+      height: 100%;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: #000; /* Black background for cinematic intro */
+      color: var(--text-primary);
+      overflow: hidden;
+    }
+
+    body {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+    }
+
+    /* ═══════ SPLASH / CURTAIN ═══════ */
+    #splashScreen {
+      position: fixed;
+      inset: 0;
+      z-index: 1000;
+      background: transparent;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
+    }
+
+    #curtainCanvas {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+    }
+
+    .splash-hidden { display: none !important; opacity: 0; transition: opacity 1s; }
+
+    /* ─── Decorative curtain rod ─── */
+    .curtain-rod {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 18px;
+      z-index: 1001;
+      background: linear-gradient(180deg, #3a2a18 0%, #6b4c2a 40%, #c9a45c 52%, #6b4c2a 64%, #3a2a18 100%);
+      box-shadow: 0 4px 20px rgba(0,0,0,0.6);
+    }
+
+    .curtain-rod::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(90deg,
+        transparent 0%, rgba(255,220,140,0.15) 10%, transparent 20%,
+        transparent 40%, rgba(255,220,140,0.2) 50%, transparent 60%,
+        transparent 80%, rgba(255,220,140,0.15) 90%, transparent 100%
+      );
+    }
+
+    /* ═══════ PRESENTATION TEXTS ═══════ */
+    #presentationScreen {
+      position: fixed;
+      inset: 0;
+      z-index: 500;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #000;
+      pointer-events: none;
+    }
+
+    .pres-text {
+      position: absolute;
+      opacity: 0;
+      transition: opacity 1s ease-in-out, transform 3s ease-out;
+      font-family: 'Playfair Display', serif;
+      text-align: center;
+      transform: scale(0.95);
+      color: #e5d3b3;
+    }
+
+    .pres-text h2 {
+      font-size: 1.5rem;
+      letter-spacing: 0.4em;
+      font-weight: 700;
+      text-transform: uppercase;
+      margin-bottom: 10px;
+    }
+
+    .pres-text h1 {
+      font-size: 3.5rem;
+      letter-spacing: 0.15em;
+      font-weight: 900;
+      text-transform: uppercase;
+      background: linear-gradient(to bottom, #fff, #c9a45c);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      text-shadow: 0 4px 20px rgba(201, 164, 92, 0.2);
+    }
+
+    .pres-text.visible {
+      opacity: 1;
+      transform: scale(1);
+    }
+
+    /* ═══════ PLAYER ═══════ */
+    #playerScreen {
+      position: fixed;
+      inset: 0;
+      z-index: 100;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: var(--bg-primary);
+      opacity: 0;
+      transition: opacity 1.5s ease-in-out;
+      pointer-events: none;
+    }
+
+    #playerScreen.visible {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    #playerScreen::before, #playerScreen::after {
+      content: '';
+      position: absolute;
+      border-radius: 50%;
+      filter: blur(120px);
+      opacity: 0.4;
+      z-index: 0;
+      pointer-events: none;
+      animation: float 12s ease-in-out infinite alternate;
+    }
+
+    #playerScreen::before {
+      width: 500px; height: 500px;
+      background: radial-gradient(circle, var(--accent-glow), transparent 70%);
+      top: -10%; left: -10%;
+    }
+
+    #playerScreen::after {
+      width: 400px; height: 400px;
+      background: radial-gradient(circle, rgba(80, 60, 220, 0.25), transparent 70%);
+      bottom: -10%; right: -10%;
+      animation-delay: -6s;
+    }
+
+    @keyframes float {
+      0%   { transform: translate(0, 0) scale(1); }
+      100% { transform: translate(40px, -30px) scale(1.1); }
+    }
+
+    .player-wrapper {
+      position: relative;
+      z-index: 1;
+      width: 94vw;
+      max-width: 1100px;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+      border-radius: var(--radius);
+    }
+
+    .top-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 22px;
+      background: var(--bg-glass);
+      backdrop-filter: blur(24px);
+      border: 1px solid var(--border);
+      border-bottom: none;
+      border-radius: var(--radius) var(--radius) 0 0;
+    }
+
+    .channel-info { display: flex; align-items: center; gap: 14px; }
+    .channel-logo {
+      width: 40px; height: 40px;
+      border-radius: 10px;
+      object-fit: cover;
+      border: 1px solid var(--border);
+      background: var(--bg-secondary);
+    }
+    .channel-text h1 { font-size: 1rem; font-weight: 700; letter-spacing: -0.02em; line-height: 1.2; }
+    .channel-text span { font-size: 0.72rem; color: var(--text-secondary); font-weight: 500; }
+
+    .status-badge {
+      display: flex; align-items: center; gap: 7px;
+      padding: 6px 14px; border-radius: 100px;
+      font-size: 0.72rem; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 0.06em; transition: all 0.4s ease;
+    }
+    .status-badge.live { background: var(--accent-dim); color: var(--accent); }
+    .status-badge.reconnecting { background: rgba(255, 179, 71, 0.12); color: var(--warning); }
+    .status-badge.error { background: rgba(255, 77, 106, 0.12); color: var(--danger); }
+
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; position: relative; }
+    .status-badge.live .status-dot::after {
+      content: ''; position: absolute; inset: -3px; border-radius: 50%;
+      background: currentColor; opacity: 0.4; animation: pulse-dot 1.8s ease-in-out infinite;
+    }
+
+    @keyframes pulse-dot { 0%, 100% { transform: scale(1); opacity: 0.4; } 50% { transform: scale(1.8); opacity: 0; } }
+
+    .video-container {
+      position: relative; width: 100%; aspect-ratio: 16 / 9;
+      background: #000; overflow: hidden;
+    }
+    .video-container video { width: 100%; height: 100%; display: block; background: #000; }
+
+    .reconnect-overlay {
+      position: absolute; inset: 0; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; background: rgba(0, 0, 0, 0.75);
+      backdrop-filter: blur(8px); z-index: 5; opacity: 0; pointer-events: none; transition: opacity 0.4s ease;
+    }
+    .reconnect-overlay.visible { opacity: 1; pointer-events: auto; }
+    .spinner {
+      width: 48px; height: 48px; border: 3px solid rgba(255,255,255,0.1);
+      border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; margin-bottom: 18px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .reconnect-overlay p { font-size: 0.9rem; color: var(--text-secondary); font-weight: 500; }
+    .reconnect-overlay .attempt-count { font-size: 0.75rem; color: var(--text-secondary); margin-top: 6px; opacity: 0.7; }
+
+    .bottom-bar {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 22px; background: var(--bg-glass); backdrop-filter: blur(24px);
+      border: 1px solid var(--border); border-top: 1px solid rgba(255,255,255,0.03);
+      border-radius: 0 0 var(--radius) var(--radius);
+    }
+    .bottom-bar .meta {
+      font-size: 0.72rem; color: var(--text-secondary); font-weight: 500;
+      display: flex; align-items: center; gap: 16px;
+    }
+    .bottom-bar .meta .separator { width: 3px; height: 3px; border-radius: 50%; background: var(--text-secondary); opacity: 0.5; }
+    .bottom-bar .controls { display: flex; gap: 8px; }
+
+    .btn {
+      padding: 7px 16px; border: 1px solid var(--border); border-radius: 8px;
+      background: rgba(255,255,255,0.04); color: var(--text-secondary); font-family: inherit;
+      font-size: 0.72rem; font-weight: 600; cursor: pointer; transition: all 0.2s ease;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .btn:hover { background: rgba(255,255,255,0.08); color: var(--text-primary); border-color: rgba(255,255,255,0.12); }
+    .btn svg { width: 14px; height: 14px; }
+
+    .event-log {
+      position: fixed; bottom: 16px; left: 16px; z-index: 1000;
+      display: flex; flex-direction: column; gap: 4px; max-width: 360px; pointer-events: none;
+    }
+    .log-entry {
+      padding: 8px 14px; background: var(--bg-glass); backdrop-filter: blur(20px);
+      border: 1px solid var(--border); border-radius: 10px; font-size: 0.68rem;
+      color: var(--text-secondary); font-weight: 500;
+      animation: slideUp 0.3s ease, fadeOut 0.5s ease 4.5s forwards;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .log-entry .log-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+    .log-entry .log-dot.green  { background: var(--accent); }
+    .log-entry .log-dot.yellow { background: var(--warning); }
+    .log-entry .log-dot.red    { background: var(--danger); }
+    @keyframes slideUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes fadeOut { to { opacity: 0; transform: translateY(-6px); } }
+
+    @media (max-width: 600px) {
+      .player-wrapper { width: 100vw; max-width: 100%; border-radius: 0; }
+      .top-bar, .bottom-bar { padding: 10px 14px; border-radius: 0; }
+      .channel-logo { width: 32px; height: 32px; }
+      .channel-text h1 { font-size: 0.88rem; }
+      .bottom-bar .meta { display: none; }
+      .pres-text h1 { font-size: 2rem; }
+      .pres-text h2 { font-size: 1rem; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ═══════ SPLASH CURTAIN ═══════ -->
+  <div id="splashScreen">
+    <div class="curtain-rod"></div>
+    <canvas id="curtainCanvas"></canvas>
+  </div>
+
+  <!-- ═══════ PRESENTATION SCREEN ═══════ -->
+  <div id="presentationScreen">
+    <div class="pres-text" id="presText1">
+      <h2>Polayadees Presents</h2>
+    </div>
+    <div class="pres-text" id="presText2">
+      <h1>Globo TV Brazil</h1>
+    </div>
+  </div>
+
+  <!-- ═══════ PLAYER ═══════ -->
+  <div id="playerScreen">
+    <div class="player-wrapper">
+      <div class="top-bar">
+        <div class="channel-info">
+          <img class="channel-logo" src="https://i.imgur.com/OoSUg78.png" alt="Globo TV Brazil" onerror="this.style.display='none'">
+          <div class="channel-text">
+            <h1>Globo TV Brazil</h1>
+            <span>IPTV · 1080p · Live</span>
+          </div>
+        </div>
+        <div class="status-badge live" id="statusBadge">
+          <span class="status-dot"></span>
+          <span id="statusText">LIVE</span>
+        </div>
+      </div>
+
+      <div class="video-container" id="videoContainer">
+        <video id="videoPlayer" autoplay muted playsinline></video>
+        <div class="reconnect-overlay" id="reconnectOverlay">
+          <div class="spinner"></div>
+          <p>Reconnecting to stream…</p>
+          <span class="attempt-count" id="attemptCount"></span>
+        </div>
+      </div>
+
+      <div class="bottom-bar">
+        <div class="meta">
+          <span id="clockDisplay">--:--:--</span>
+          <span class="separator"></span>
+          <span id="uptimeDisplay">Uptime: --</span>
+        </div>
+        <div class="controls">
+          <button class="btn" id="muteBtn" onclick="toggleMute()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+              <line x1="23" y1="9" x2="17" y2="15" id="muteLine1"></line>
+              <line x1="17" y1="9" x2="23" y2="15" id="muteLine2"></line>
+            </svg>
+            <span id="muteText">Unmute</span>
+          </button>
+          <button class="btn" onclick="manualReload()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="23 4 23 10 17 10"></polyline>
+              <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+            </svg>
+            Reload
+          </button>
+          <button class="btn" id="fullscreenBtn" onclick="goFullscreen()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="15 3 21 3 21 9"></polyline>
+              <polyline points="9 21 3 21 3 15"></polyline>
+              <line x1="21" y1="3" x2="14" y2="10"></line>
+              <line x1="3" y1="21" x2="10" y2="14"></line>
+            </svg>
+            Fullscreen
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="event-log" id="eventLog"></div>
+
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <!-- CLOTH PHYSICS CURTAIN (BLANK)                               -->
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <script>
+  (function() {
+    const canvas = document.getElementById('curtainCanvas');
+    const ctx    = canvas.getContext('2d');
+    const splash = document.getElementById('splashScreen');
+
+    // ── Grid resolution increased for smoother cloth ──
+    const COLS = 120;
+    const ROWS = 90;
+    const GRAVITY = 0.35;
+    const DAMPING = 0.985;
+    const CONSTRAINT_ITERS = 6;
+
+    let W, H, spacingX, spacingY;
+    let pointsLeft  = [];
+    let pointsRight = [];
+    let opening = false;
+    let openProgress = 0;      // 0 → 1
+    let curtainDone = false;
+    let idleTime = 0;          // for pre-open ripple
+
+    function resize() {
+      W = canvas.width  = window.innerWidth;
+      H = canvas.height = window.innerHeight;
+      spacingX = (W / 2) / (COLS - 1);
+      spacingY = (H - 20) / (ROWS - 1);
+      buildCurtains();
+    }
+
+    function makePoint(x, y, pinned) {
+      return { x, y, ox: x, oy: y, px: x, py: y, pinned, pinX: x, pinY: y };
+    }
+
+    function buildCurtains() {
+      pointsLeft  = [];
+      pointsRight = [];
+      const topY = 18;
+
+      for (let r = 0; r < ROWS; r++) {
+        for (let c = 0; c < COLS; c++) {
+          const lx = c * spacingX;
+          const ly = topY + r * spacingY;
+          pointsLeft.push(makePoint(lx, ly, r === 0));
+
+          const rx = W / 2 + c * spacingX;
+          const ry = topY + r * spacingY;
+          pointsRight.push(makePoint(rx, ry, r === 0));
+        }
+      }
+    }
+
+    // ── Physics ──
+    function simulate(points) {
+      for (const p of points) {
+        if (p.pinned) {
+          p.x = p.pinX;
+          p.y = p.pinY;
+          continue;
+        }
+        const vx = (p.x - p.px) * DAMPING;
+        const vy = (p.y - p.py) * DAMPING;
+        p.px = p.x;
+        p.py = p.y;
+        p.x += vx;
+        p.y += vy + GRAVITY;
+      }
+
+      // Constraints
+      for (let iter = 0; iter < CONSTRAINT_ITERS; iter++) {
+        for (let r = 0; r < ROWS; r++) {
+          for (let c = 0; c < COLS; c++) {
+            const i = r * COLS + c;
+            if (c < COLS - 1) constrain(points[i], points[i + 1], spacingX);
+            if (r < ROWS - 1) constrain(points[i], points[i + COLS], spacingY);
+          }
+        }
+      }
+    }
+
+    function constrain(a, b, rest) {
+      const dx = b.x - a.x;
+      const dy = b.y - a.y;
+      const dist = Math.sqrt(dx * dx + dy * dy) || 0.001;
+      const diff = (dist - rest) / dist * 0.5;
+      const ox = dx * diff;
+      const oy = dy * diff;
+      if (!a.pinned) { a.x += ox; a.y += oy; }
+      if (!b.pinned) { b.x -= ox; b.y -= oy; }
+    }
+
+    // ── Opening animation ──
+    function updateOpening(dt) {
+      if (!opening) return;
+      openProgress += dt * 0.45;
+      if (openProgress > 1) openProgress = 1;
+
+      const t = 1 - Math.pow(1 - openProgress, 3);
+
+      for (let c = 0; c < COLS; c++) {
+        const pl = pointsLeft[c];
+        pl.pinX = pl.ox - (W / 2 + 100) * t;
+
+        const pr = pointsRight[c];
+        pr.pinX = pr.ox + (W / 2 + 100) * t;
+      }
+
+      if (openProgress >= 1 && !curtainDone) {
+        curtainDone = true;
+        setTimeout(() => {
+          splash.classList.add('splash-hidden');
+        }, 1000);
+      }
+    }
+
+    // ── Idle ripple ──
+    function applyWind(points, side) {
+      if (opening) return;
+      idleTime += 0.016;
+      for (let r = 1; r < ROWS; r++) {
+        for (let c = 0; c < COLS; c++) {
+          const p = points[r * COLS + c];
+          const wave = Math.sin(idleTime * 1.5 + r * 0.3 + c * 0.2) * 0.4;
+          const gust = Math.sin(idleTime * 0.7 + c * 0.5) * 0.15;
+          p.x += (wave + gust) * (side === 'left' ? 1 : -1);
+        }
+      }
+    }
+
+    // ── Render ──
+    function renderCurtain(points) {
+      for (let r = 0; r < ROWS - 1; r++) {
+        for (let c = 0; c < COLS - 1; c++) {
+          const i  = r * COLS + c;
+          const tl = points[i];
+          const tr = points[i + 1];
+          const bl = points[i + COLS];
+          const br = points[i + COLS + 1];
+
+          const nx = (tr.x - tl.x);
+          const foldShade = Math.abs(nx) / spacingX;
+          const depth = 0.3 + foldShade * 0.5;
+
+          const baseR = 100, baseG = 14, baseB = 22;
+          const rr = Math.floor(baseR * depth);
+          const gg = Math.floor(baseG * depth);
+          const bb = Math.floor(baseB * depth);
+
+          // Sub-pixel rendering overlap to fix thin gaps
+          ctx.fillStyle = `rgb(${rr},${gg},${bb})`;
+          ctx.beginPath();
+          ctx.moveTo(tl.x - 0.5, tl.y - 0.5);
+          ctx.lineTo(tr.x + 0.5, tr.y - 0.5);
+          ctx.lineTo(br.x + 0.5, br.y + 0.5);
+          ctx.lineTo(bl.x - 0.5, bl.y + 0.5);
+          ctx.closePath();
+          ctx.fill();
+        }
+      }
+    }
+
+    // ── Main loop ──
+    let lastTime = 0;
+    function loop(time) {
+      if (curtainDone && splash.classList.contains('splash-hidden')) return;
+
+      const dt = Math.min((time - lastTime) / 1000, 0.05) || 0.016;
+      lastTime = time;
+
+      ctx.clearRect(0, 0, W, H);
+      
+      // Black background
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, W, H);
+
+      updateOpening(dt);
+
+      applyWind(pointsLeft, 'left');
+      applyWind(pointsRight, 'right');
+
+      simulate(pointsLeft);
+      simulate(pointsRight);
+
+      renderCurtain(pointsLeft);
+      renderCurtain(pointsRight);
+
+      const rodGrad = ctx.createLinearGradient(0, 0, 0, 18);
+      rodGrad.addColorStop(0, '#3a2a18');
+      rodGrad.addColorStop(0.4, '#6b4c2a');
+      rodGrad.addColorStop(0.52, '#c9a45c');
+      rodGrad.addColorStop(0.64, '#6b4c2a');
+      rodGrad.addColorStop(1, '#3a2a18');
+      ctx.fillStyle = rodGrad;
+      ctx.fillRect(0, 0, W, 18);
+
+      for (const fx of [14, W - 14]) {
+        const fGrad = ctx.createRadialGradient(fx - 2, 9, 0, fx, 10, 12);
+        fGrad.addColorStop(0, '#d4aa54');
+        fGrad.addColorStop(0.6, '#8b6228');
+        fGrad.addColorStop(1, '#3a2a18');
+        ctx.beginPath();
+        ctx.arc(fx, 10, 10, 0, Math.PI * 2);
+        ctx.fillStyle = fGrad;
+        ctx.fill();
+      }
+
+      requestAnimationFrame(loop);
+    }
+
+    window.addEventListener('resize', resize);
+    resize();
+    requestAnimationFrame(loop);
+
+    // Sequence trigger
+    window.triggerCurtainSequence = function() {
+      opening = true;
+    };
+  })();
+  </script>
+
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <!-- SEQUENCE AND PLAYER LOGIC                                   -->
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <script>
+    const STREAM_URL = 'http://187.62.68.32:8080/GLOBO/index.m3u8';
+    const MAX_RETRIES = Infinity;
+    const BASE_RETRY_DELAY = 3000;
+    const MAX_RETRY_DELAY = 30000;
+    const STALL_TIMEOUT = 15000;
+
+    const video           = document.getElementById('videoPlayer');
+    const videoContainer  = document.getElementById('videoContainer');
+    const statusBadge     = document.getElementById('statusBadge');
+    const statusTextEl    = document.getElementById('statusText');
+    const reconnectOverlay= document.getElementById('reconnectOverlay');
+    const attemptCountEl  = document.getElementById('attemptCount');
+    const clockDisplay    = document.getElementById('clockDisplay');
+    const uptimeDisplay   = document.getElementById('uptimeDisplay');
+    const muteTextEl      = document.getElementById('muteText');
+    const muteLine1       = document.getElementById('muteLine1');
+    const muteLine2       = document.getElementById('muteLine2');
+
+    let hls = null;
+    let retryCount = 0;
+    let retryTimer = null;
+    let stallTimer = null;
+    let startTime = Date.now();
+    let lastPlayPos = 0;
+    let lastPlayTime = Date.now();
+    
+    // ── SEQUENCING TIMELINE ──
+    document.addEventListener("DOMContentLoaded", () => {
+      // 1. Immediately start preloading the stream in background
+      initStream();
+      
+      // 2. Open curtains automatically after 2 seconds
+      setTimeout(() => {
+        if(window.triggerCurtainSequence) window.triggerCurtainSequence();
+      }, 2000);
+
+      // 3. Show "KUTTAPAAYI PRESENTS"
+      setTimeout(() => {
+        document.getElementById('presText1').classList.add('visible');
+      }, 3500);
+
+      // 4. Fade out "KUTTAPAAYI PRESENTS"
+      setTimeout(() => {
+        document.getElementById('presText1').classList.remove('visible');
+      }, 6000);
+
+      // 5. Show "GLOBO TV BRAZIL"
+      setTimeout(() => {
+        document.getElementById('presText2').classList.add('visible');
+      }, 7000);
+
+      // 6. Fade out "GLOBO TV BRAZIL"
+      setTimeout(() => {
+        document.getElementById('presText2').classList.remove('visible');
+      }, 9500);
+
+      // 7. Hide presentation screen and reveal player
+      setTimeout(() => {
+        document.getElementById('presentationScreen').style.display = 'none';
+        document.getElementById('playerScreen').classList.add('visible');
+      }, 10500);
+    });
+
+    function addLog(message, color = 'green') {
+      const log = document.getElementById('eventLog');
+      const entry = document.createElement('div');
+      entry.className = 'log-entry';
+      entry.innerHTML = `<span class="log-dot ${color}"></span>${message}`;
+      log.appendChild(entry);
+      setTimeout(() => entry.remove(), 5500);
+      while (log.children.length > 4) log.firstChild.remove();
+    }
+
+    function setStatus(state, text) {
+      statusBadge.className = 'status-badge ' + state;
+      statusTextEl.textContent = text;
+    }
+
+    function showOverlay(show, attempt) {
+      reconnectOverlay.classList.toggle('visible', show);
+      if (attempt !== undefined) attemptCountEl.textContent = `Attempt ${attempt}`;
+    }
+
+    function updateClock() {
+      const now = new Date();
+      clockDisplay.textContent = now.toLocaleTimeString();
+      const elapsed = Math.floor((Date.now() - startTime) / 1000);
+      const h = Math.floor(elapsed / 3600);
+      const m = Math.floor((elapsed % 3600) / 60);
+      const s = elapsed % 60;
+      uptimeDisplay.textContent = `Uptime: ${h > 0 ? h + 'h ' : ''}${m}m ${s}s`;
+    }
+    setInterval(updateClock, 1000);
+    updateClock();
+
+    function toggleMute() {
+      video.muted = !video.muted;
+      muteTextEl.textContent = video.muted ? 'Unmute' : 'Mute';
+      muteLine1.style.display = video.muted ? '' : 'none';
+      muteLine2.style.display = video.muted ? '' : 'none';
+    }
+
+    function goFullscreen() {
+      const el = videoContainer;
+      if (el.requestFullscreen) el.requestFullscreen();
+      else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+      else if (el.msRequestFullscreen) el.msRequestFullscreen();
+    }
+
+    function startStallDetection() {
+      clearInterval(stallTimer);
+      lastPlayPos = video.currentTime;
+      lastPlayTime = Date.now();
+      stallTimer = setInterval(() => {
+        if (video.paused || video.ended) return;
+        if (video.currentTime === lastPlayPos && Date.now() - lastPlayTime > STALL_TIMEOUT) {
+          addLog('Stream stalled — restarting…', 'yellow');
+          restartStream();
+        }
+        if (video.currentTime !== lastPlayPos) {
+          lastPlayPos = video.currentTime;
+          lastPlayTime = Date.now();
+        }
+      }, 2000);
+    }
+
+    function destroyHls() {
+      if (hls) { hls.destroy(); hls = null; }
+      clearTimeout(retryTimer);
+      clearInterval(stallTimer);
+    }
+
+    function initStream() {
+      destroyHls();
+      startTime = Date.now();
+
+      if (!Hls.isSupported()) {
+        video.src = STREAM_URL;
+        video.addEventListener('error', () => scheduleRetry());
+        video.play().catch(() => {});
+        addLog('Using native HLS playback', 'green');
+        return;
+      }
+
+      hls = new Hls({
+        enableWorker: true,
+        lowLatencyMode: false,
+        fragLoadingTimeOut: 20000,
+        fragLoadingMaxRetry: 6,
+        fragLoadingRetryDelay: 1000,
+        manifestLoadingTimeOut: 15000,
+        manifestLoadingMaxRetry: 4,
+        manifestLoadingRetryDelay: 1500,
+        levelLoadingTimeOut: 15000,
+        levelLoadingMaxRetry: 4,
+        levelLoadingRetryDelay: 1500,
+        startLevel: -1,
+      });
+
+      hls.loadSource(STREAM_URL);
+      hls.attachMedia(video);
+
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        video.play().catch(() => {});
+        retryCount = 0;
+        setStatus('live', 'LIVE');
+        showOverlay(false);
+        addLog('Stream preloading connected', 'green');
+        startStallDetection();
+      });
+
+      hls.on(Hls.Events.ERROR, (event, data) => {
+        console.warn('[HLS Error]', data.type, data.details, data.fatal);
+        if (data.fatal) {
+          switch (data.type) {
+            case Hls.ErrorTypes.NETWORK_ERROR:
+              addLog(`Network error: ${data.details}`, 'red');
+              hls.startLoad();
+              retryTimer = setTimeout(() => {
+                if (hls && hls.media && hls.media.paused) scheduleRetry();
+              }, 5000);
+              break;
+            case Hls.ErrorTypes.MEDIA_ERROR:
+              addLog('Media error — recovering…', 'yellow');
+              hls.recoverMediaError();
+              break;
+            default:
+              addLog(`Fatal error: ${data.details}`, 'red');
+              scheduleRetry();
+              break;
+          }
+        }
+      });
+
+      video.addEventListener('waiting', () => setStatus('reconnecting', 'BUFFERING'));
+      video.addEventListener('playing', () => {
+        setStatus('live', 'LIVE');
+        showOverlay(false);
+        retryCount = 0;
+      });
+    }
+
+    function scheduleRetry() {
+      destroyHls();
+      retryCount++;
+      const delay = Math.min(BASE_RETRY_DELAY * Math.pow(1.5, retryCount - 1), MAX_RETRY_DELAY);
+      setStatus('reconnecting', 'RECONNECTING');
+      showOverlay(true, retryCount);
+      addLog(`Retry in ${(delay / 1000).toFixed(1)}s (attempt ${retryCount})`, 'yellow');
+      retryTimer = setTimeout(() => initStream(), delay);
+    }
+
+    function restartStream() {
+      addLog('Restarting stream…', 'yellow');
+      scheduleRetry();
+    }
+
+    function manualReload() {
+      retryCount = 0;
+      addLog('Manual reload triggered', 'green');
+      setStatus('reconnecting', 'LOADING');
+      showOverlay(true, 0);
+      setTimeout(() => initStream(), 300);
+    }
+
+    video.addEventListener('error', () => {
+      addLog('Video element error', 'red');
+      scheduleRetry();
+    });
+
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden && video.paused) {
+        addLog('Tab refocused — resuming', 'green');
+        video.play().catch(() => restartStream());
+      }
+    });
+  </script>
+</body>
+</html>
