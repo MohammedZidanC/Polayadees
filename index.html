@@ -499,20 +499,20 @@
 
       hls = new Hls({
         enableWorker: true,
-        lowLatencyMode: false,
-        // -- NETWORK REINFORCEMENT --
-        maxBufferLength: 60,         // Increase buffer limit to 60 seconds
-        maxMaxBufferLength: 600,     
-        backBufferLength: 30,        // Keep history
-        liveSyncDurationCount: 6,    // Increase acceptable delay from live edge (helps stabilize stream)
-        liveMaxLatencyDurationCount: 15,
-        fragLoadingTimeOut: 20000,
-        fragLoadingMaxRetry: 10,
-        fragLoadingRetryDelay: 1000,
-        manifestLoadingTimeOut: 20000,
-        manifestLoadingMaxRetry: 10,
-        manifestLoadingRetryDelay: 1000,
-        levelLoadingMaxRetry: 10,
+        lowLatencyMode: true,
+        // -- MAXIMUM REINFORCEMENT & MINIMUM BUFFER --
+        maxBufferLength: 8,          // Minimum buffer allowed
+        maxMaxBufferLength: 15,      // Hard cap on buffer size
+        backBufferLength: 5,         // Keep minimal history
+        liveSyncDurationCount: 3,    // Stick as close to live edge as possible
+        liveMaxLatencyDurationCount: 6, 
+        fragLoadingTimeOut: 15000,
+        fragLoadingMaxRetry: 50,     // Maximize retries for dropped packets
+        fragLoadingRetryDelay: 500,  // Fast aggressive retry
+        manifestLoadingTimeOut: 15000,
+        manifestLoadingMaxRetry: 50,
+        manifestLoadingRetryDelay: 500,
+        levelLoadingMaxRetry: 50,
         startLevel: -1,
       });
 
